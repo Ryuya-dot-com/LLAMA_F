@@ -229,21 +229,14 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 8px;
-      font-size: 1.6rem;
-      min-height: 56px;
       width: 100%;
-      flex-wrap: nowrap;
-      white-space: nowrap;
+      min-height: 96px;
     }
-    .picture .subj, .picture .obj {
-      display: inline-flex;
-      align-items: center;
-      gap: 0;
-      letter-spacing: -0.15em;
-      padding-right: 0.15em;
+    .picture svg {
+      max-width: 100%;
+      height: auto;
+      display: block;
     }
-    .picture .action { font-size: 1.3rem; opacity: 0.7; padding: 0 4px; }
 
     .sentence {
       font-family: "Fraunces", "Noto Serif JP", serif;
@@ -274,10 +267,16 @@
       background: #fff6e7;
       border: 1px solid rgba(30, 28, 24, 0.08);
       border-radius: 18px;
-      padding: 18px 30px;
-      font-size: 2.6rem;
-      min-width: 280px;
+      padding: 22px 30px;
+      min-width: 320px;
       box-shadow: 0 10px 24px rgba(24, 20, 16, 0.08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .test-pic svg {
+      width: 280px;
+      height: auto;
     }
 
     .test-prompt {
@@ -416,7 +415,7 @@
             <h2 data-i18n="learn_heading"></h2>
             <div class="identifier"><span data-i18n="id_display"></span> <span id="identifier-display">-</span></div>
           </div>
-          <div class="timer" id="learn-timer" aria-live="polite">5:00</div>
+          <div class="timer" id="learn-timer" aria-live="polite">4:00</div>
         </div>
         <p class="hint" data-i18n="learn_hint"></p>
         <div id="learn-grid" class="learn-grid"></div>

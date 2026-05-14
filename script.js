@@ -1,146 +1,158 @@
 /* ===========================================================
  * LLAMA F (Grammatical Inferencing Test, local implementation)
  *
- * Artificial language: "Velmoran" (constructed for this test)
+ * Following the LLAMA-F paradigm (Meara, 2005; v4.0.6 at llamatests.org)
+ * — abstract geometric pictures with an artificial language that uses
+ * AGREEMENT-heavy morphology over a singular/dual/plural number system
+ * and a 2-class noun system. Original PATSI is Meara's; this is an
+ * independent constructed language called "Pelan".
  *
- * Lexicon
- *   Nouns:    mela=woman drun=man kira=girl tovo=boy
- *             niva=cat   bali=dog  sero=bird
- *   Objects:  fava=apple groni=ball kelo=book voren=flower
- *   Verbs:    shen=holds moval=eats dosko=watches harik=chases
+ * Pelan language
+ *   Noun stems         shape         class
+ *     tak              triangle      A (angular)
+ *     kop              square        A (angular)
+ *     sin              circle        B (round)
+ *     dut              ellipse       B (round)
  *
- * Grammar rules to infer
- *   R1. Word order:        Subject - Verb - Object  (SVO)
- *   R2. Plural noun:       prefix  "i-"   (mela -> imela; fava -> ifava)
- *   R3. Plural verb agr.:  suffix  "-na"  (shen -> shenna)  when subject is plural
- *   R4. Direct object:     suffix  "-ot"  on the object NP (favaot, ikeloot)
+ *   Number suffix on noun (encodes pic count)
+ *     -∅   singular (1 of the shape in the picture)
+ *     -i   dual     (2 of the shape)
+ *     -un  plural   (3+ of the shape)
  *
- * Picture format
- *   Each picture is rendered as:  [SUBJ emoji(s)]  [ACTION emoji]  [OBJ emoji(s)]
- *   Subject / object counts encode singular / plural visually.
+ *   Agreement particle (between SUBJ NP and PRED; agrees with SUBJ in class × number)
+ *           sg    dual   pl
+ *     A:    sa    se     so
+ *     B:    za    ze     zo
+ *
+ *   Predicate (spatial relation; takes SUBJ to OBJ)
+ *     em   above
+ *     en   below
+ *
+ *   Word order: SUBJ AGR PRED OBJ
+ *     "tak sa em sin"        = "1 triangle above 1 circle"
+ *     "taki se em sinun"     = "2 triangles above 3+ circles"
+ *     "dut za en kopi"       = "1 ellipse below 2 squares"
+ *
+ * Pictures
+ *   Two horizontal rows of shapes (top + bottom). Each row's shape
+ *   count visualises the number (1=sg, 2=dual, 3=plural). All shapes
+ *   rendered as plain SVG (no emoji), keeping the test as
+ *   language-neutral as possible per LLAMA-F design.
  * =========================================================== */
 
-/* ----------------- Training items (18) ----------------- */
+/* Map of noun stem -> visual shape + grammatical class */
+const SHAPE_MAP = {
+  tak: { shape: "triangle", cls: "A" },
+  kop: { shape: "square",   cls: "A" },
+  sin: { shape: "circle",   cls: "B" },
+  dut: { shape: "ellipse",  cls: "B" }
+};
+
+/* Training items (20): cover all 4 shapes, both classes,
+ * sg/du/pl as both subject and object, both predicates. */
 const TRAINING = [
-  // sg subject, sg object
-  { id: "T01", subj: "👩", subN: 1, act: "🤲", obj: "🍎", objN: 1, sentence: "mela shen favaot" },
-  { id: "T02", subj: "🧑", subN: 1, act: "🤲", obj: "⚽", objN: 1, sentence: "drun shen groniot" },
-  { id: "T03", subj: "👧", subN: 1, act: "🍽️", obj: "🍎", objN: 1, sentence: "kira moval favaot" },
-  { id: "T04", subj: "👦", subN: 1, act: "🍽️", obj: "🍎", objN: 1, sentence: "tovo moval favaot" },
-  { id: "T05", subj: "🐱", subN: 1, act: "🍽️", obj: "🐦", objN: 1, sentence: "niva moval seroot" },
-  { id: "T06", subj: "🐶", subN: 1, act: "🏃", obj: "🐱", objN: 1, sentence: "bali harik nivaot" },
-  { id: "T07", subj: "👩", subN: 1, act: "👀", obj: "🐶", objN: 1, sentence: "mela dosko baliot" },
-  { id: "T08", subj: "🧑", subN: 1, act: "🤲", obj: "💐", objN: 1, sentence: "drun shen vorenot" },
-  // pl subject, sg object
-  { id: "T09", subj: "👩", subN: 2, act: "🤲", obj: "🍎", objN: 1, sentence: "imela shenna favaot" },
-  { id: "T10", subj: "🧑", subN: 2, act: "🤲", obj: "⚽", objN: 1, sentence: "idrun shenna groniot" },
-  { id: "T11", subj: "👦", subN: 2, act: "🤲", obj: "📖", objN: 1, sentence: "itovo shenna keloot" },
-  { id: "T12", subj: "🐱", subN: 2, act: "🍽️", obj: "🐦", objN: 1, sentence: "iniva movalna seroot" },
-  { id: "T13", subj: "🐶", subN: 2, act: "🏃", obj: "🐱", objN: 1, sentence: "ibali harikna nivaot" },
-  // sg subject, pl object
-  { id: "T14", subj: "👩", subN: 1, act: "🤲", obj: "📖", objN: 2, sentence: "mela shen ikeloot" },
-  { id: "T15", subj: "👦", subN: 1, act: "🍽️", obj: "🍎", objN: 2, sentence: "tovo moval ifavaot" },
-  { id: "T16", subj: "🧑", subN: 1, act: "🤲", obj: "⚽", objN: 2, sentence: "drun shen igroniot" },
-  // pl subject, pl object
-  { id: "T17", subj: "👩", subN: 2, act: "🤲", obj: "🍎", objN: 2, sentence: "imela shenna ifavaot" },
-  { id: "T18", subj: "👦", subN: 2, act: "🤲", obj: "📖", objN: 2, sentence: "itovo shenna ikeloot" }
+  // ----- Singular subject -----
+  { id: "T01", subj: "tak", subN: 1, obj: "sin", objN: 1, relation: "above", sentence: "tak sa em sin" },
+  { id: "T02", subj: "kop", subN: 1, obj: "sin", objN: 1, relation: "above", sentence: "kop sa em sin" },
+  { id: "T03", subj: "sin", subN: 1, obj: "tak", objN: 1, relation: "above", sentence: "sin za em tak" },
+  { id: "T04", subj: "dut", subN: 1, obj: "kop", objN: 1, relation: "above", sentence: "dut za em kop" },
+  { id: "T05", subj: "tak", subN: 1, obj: "sin", objN: 1, relation: "below", sentence: "tak sa en sin" },
+  { id: "T06", subj: "sin", subN: 1, obj: "tak", objN: 1, relation: "below", sentence: "sin za en tak" },
+  // ----- Dual subject -----
+  { id: "T07", subj: "tak", subN: 2, obj: "sin", objN: 1, relation: "above", sentence: "taki se em sin" },
+  { id: "T08", subj: "sin", subN: 2, obj: "tak", objN: 1, relation: "above", sentence: "sini ze em tak" },
+  { id: "T09", subj: "tak", subN: 2, obj: "sin", objN: 2, relation: "above", sentence: "taki se em sini" },
+  { id: "T10", subj: "sin", subN: 2, obj: "tak", objN: 2, relation: "below", sentence: "sini ze en taki" },
+  { id: "T11", subj: "kop", subN: 2, obj: "dut", objN: 1, relation: "above", sentence: "kopi se em dut" },
+  { id: "T12", subj: "dut", subN: 2, obj: "kop", objN: 1, relation: "below", sentence: "duti ze en kop" },
+  // ----- Plural subject (≥3) -----
+  { id: "T13", subj: "tak", subN: 3, obj: "sin", objN: 1, relation: "above", sentence: "takun so em sin" },
+  { id: "T14", subj: "sin", subN: 3, obj: "tak", objN: 1, relation: "above", sentence: "sinun zo em tak" },
+  { id: "T15", subj: "tak", subN: 3, obj: "sin", objN: 2, relation: "above", sentence: "takun so em sini" },
+  { id: "T16", subj: "sin", subN: 3, obj: "tak", objN: 2, relation: "above", sentence: "sinun zo em taki" },
+  { id: "T17", subj: "kop", subN: 3, obj: "dut", objN: 1, relation: "below", sentence: "kopun so en dut" },
+  { id: "T18", subj: "dut", subN: 3, obj: "kop", objN: 1, relation: "below", sentence: "dutun zo en kop" },
+  // ----- Sg subj + pl obj -----
+  { id: "T19", subj: "tak", subN: 1, obj: "sin", objN: 3, relation: "above", sentence: "tak sa em sinun" },
+  { id: "T20", subj: "sin", subN: 1, obj: "tak", objN: 3, relation: "below", sentence: "sin za en takun" }
 ];
 
-/* ----------------- Test items (20, 2AFC) -----------------
- * `correct` indicates which choice (A or B) is the
- * grammatically + picture-matching sentence. `violation`
- * documents which Velmoran rule the distractor breaks.
+/* Test items (20, 2AFC). Each distractor violates one Pelan rule.
+ * Violations balanced toward AGREEMENT (class + number) rather than
+ * word order, matching LLAMA-F's design emphasis.
+ * Correct answers alternated A/B for 10/10 balance.
  */
 const TEST = [
-  { id: "Q01", subj: "👩", subN: 1, act: "🤲", obj: "🍎", objN: 1,
-    a: "mela shen favaot", b: "mela shenna favaot",
-    correct: "A", violation: "R3 (pl verb with sg subject)" },
-
-  { id: "Q02", subj: "👦", subN: 2, act: "🤲", obj: "📖", objN: 1,
-    a: "tovo shenna keloot", b: "itovo shenna keloot",
-    correct: "B", violation: "R2 (missing pl on subject)" },
-
-  { id: "Q03", subj: "🧑", subN: 1, act: "🤲", obj: "⚽", objN: 2,
-    a: "drun shen igroniot", b: "drun shen groniot",
-    correct: "A", violation: "R2 (missing pl on object)" },
-
-  { id: "Q04", subj: "👧", subN: 1, act: "🍽️", obj: "🍎", objN: 1,
-    a: "kira moval fava", b: "kira moval favaot",
-    correct: "B", violation: "R4 (missing object marker)" },
-
-  { id: "Q05", subj: "🐶", subN: 1, act: "🏃", obj: "🐱", objN: 1,
-    a: "niva harik baliot", b: "bali harik nivaot",
-    correct: "B", violation: "subject/object identification" },
-
-  { id: "Q06", subj: "🐱", subN: 2, act: "🍽️", obj: "🐦", objN: 1,
-    a: "iniva movalna seroot", b: "iniva moval seroot",
-    correct: "A", violation: "R3 (missing pl verb agreement)" },
-
-  { id: "Q07", subj: "👩", subN: 2, act: "🤲", obj: "🍎", objN: 2,
-    a: "mela shenna ifavaot", b: "imela shenna ifavaot",
-    correct: "B", violation: "R2 (missing pl on subject)" },
-
-  { id: "Q08", subj: "👦", subN: 1, act: "🍽️", obj: "🍎", objN: 2,
-    a: "tovo movalna ifavaot", b: "tovo moval ifavaot",
-    correct: "B", violation: "R3 (pl verb with sg subject)" },
-
-  { id: "Q09", subj: "🧑", subN: 1, act: "🤲", obj: "💐", objN: 1,
-    a: "drun shen vorenot", b: "drun vorenot shen",
-    correct: "A", violation: "R1 (SOV instead of SVO)" },
-
-  { id: "Q10", subj: "👩", subN: 1, act: "👀", obj: "🐶", objN: 1,
-    a: "mela dosko bali", b: "mela dosko baliot",
-    correct: "B", violation: "R4 (missing object marker)" },
-
-  { id: "Q11", subj: "👩", subN: 2, act: "🤲", obj: "💐", objN: 1,
-    a: "imela shenna vorenot", b: "imela shen vorenot",
-    correct: "A", violation: "R3 (missing pl verb agreement)" },
-
-  { id: "Q12", subj: "🐶", subN: 2, act: "🏃", obj: "🐱", objN: 2,
-    a: "ibali harikna inivaot", b: "ibali harikna nivaot",
-    correct: "A", violation: "R2 (missing pl on object)" },
-
-  { id: "Q13", subj: "👧", subN: 1, act: "🤲", obj: "📖", objN: 2,
-    a: "kira shen kelo", b: "kira shen ikeloot",
-    correct: "B", violation: "R2 + R4 (missing pl and object marker)" },
-
-  { id: "Q14", subj: "👧", subN: 1, act: "🍽️", obj: "🍎", objN: 1,
-    a: "favaot moval kira", b: "kira moval favaot",
-    correct: "B", violation: "R1 (OVS reverse order)" },
-
-  { id: "Q15", subj: "👦", subN: 2, act: "🤲", obj: "📖", objN: 2,
-    a: "itovo shenna ikeloot", b: "tovo shen kelo",
-    correct: "A", violation: "R2 + R3 + R4 (no plural marking at all)" },
-
-  { id: "Q16", subj: "🐱", subN: 1, act: "🍽️", obj: "🐦", objN: 1,
-    a: "niva moval seroot", b: "niva movalna seroot",
-    correct: "A", violation: "R3 (pl verb with sg subject)" },
-
-  { id: "Q17", subj: "👩", subN: 1, act: "🤲", obj: "🍎", objN: 2,
-    a: "imela shen ifavaot", b: "mela shen ifavaot",
-    correct: "B", violation: "R2 (incorrect pl on sg subject)" },
-
-  { id: "Q18", subj: "🧑", subN: 1, act: "🏃", obj: "👦", objN: 1,
-    a: "drun harik tovoot", b: "tovo harik drunot",
-    correct: "A", violation: "subject/object identification" },
-
-  { id: "Q19", subj: "🐶", subN: 2, act: "🏃", obj: "🐦", objN: 1,
-    a: "ibali harikna seroot", b: "bali harikna seroot",
-    correct: "A", violation: "R2 (missing pl on subject)" },
-
-  { id: "Q20", subj: "👦", subN: 1, act: "🤲", obj: "📖", objN: 1,
-    a: "tovo shenna keloot", b: "tovo shen keloot",
-    correct: "B", violation: "R3 (pl verb with sg subject)" }
+  { id: "Q01", subj: "tak", subN: 1, obj: "sin", objN: 1, relation: "above",
+    a: "tak sa em sin",      b: "tak za em sin",
+    correct: "A", violation: "wrong AGR class (sa vs za)" },
+  { id: "Q02", subj: "tak", subN: 2, obj: "sin", objN: 1, relation: "above",
+    a: "taki sa em sin",     b: "taki se em sin",
+    correct: "B", violation: "wrong AGR number (sa vs se)" },
+  { id: "Q03", subj: "sin", subN: 1, obj: "tak", objN: 1, relation: "above",
+    a: "sin za em tak",      b: "tak sa em sin",
+    correct: "A", violation: "subject/object swap" },
+  { id: "Q04", subj: "tak", subN: 1, obj: "sin", objN: 1, relation: "below",
+    a: "tak sa em sin",      b: "tak sa en sin",
+    correct: "B", violation: "wrong predicate (em vs en)" },
+  { id: "Q05", subj: "sin", subN: 3, obj: "tak", objN: 1, relation: "above",
+    a: "sinun zo em tak",    b: "sin zo em tak",
+    correct: "A", violation: "wrong noun-number suffix on subject" },
+  { id: "Q06", subj: "kop", subN: 2, obj: "dut", objN: 1, relation: "above",
+    a: "kopi ze em dut",     b: "kopi se em dut",
+    correct: "B", violation: "wrong AGR class (ze vs se)" },
+  { id: "Q07", subj: "kop", subN: 1, obj: "sin", objN: 1, relation: "above",
+    a: "kop sa em sin",      b: "kopi sa em sin",
+    correct: "A", violation: "wrong noun-number suffix on sg subject" },
+  { id: "Q08", subj: "tak", subN: 2, obj: "sin", objN: 3, relation: "below",
+    a: "taki se en sin",     b: "taki se en sinun",
+    correct: "B", violation: "wrong noun-number suffix on pl object" },
+  { id: "Q09", subj: "dut", subN: 1, obj: "kop", objN: 1, relation: "above",
+    a: "dut za em kop",      b: "kop sa em dut",
+    correct: "A", violation: "subject/object swap" },
+  { id: "Q10", subj: "kop", subN: 3, obj: "dut", objN: 2, relation: "above",
+    a: "kopun so em dut",    b: "kopun so em duti",
+    correct: "B", violation: "wrong noun-number suffix on dual object" },
+  { id: "Q11", subj: "sin", subN: 1, obj: "tak", objN: 2, relation: "below",
+    a: "sin za en taki",     b: "sin ze en taki",
+    correct: "A", violation: "wrong AGR number on sg subject" },
+  { id: "Q12", subj: "dut", subN: 2, obj: "kop", objN: 1, relation: "above",
+    a: "duti zo em kop",     b: "duti ze em kop",
+    correct: "B", violation: "wrong AGR number (zo vs ze)" },
+  { id: "Q13", subj: "tak", subN: 1, obj: "sin", objN: 3, relation: "below",
+    a: "tak sa en sinun",    b: "tak sa em sinun",
+    correct: "A", violation: "wrong predicate (en vs em)" },
+  { id: "Q14", subj: "tak", subN: 3, obj: "sin", objN: 1, relation: "below",
+    a: "tak so en sin",      b: "takun so en sin",
+    correct: "B", violation: "wrong noun-number suffix on pl subject" },
+  { id: "Q15", subj: "sin", subN: 2, obj: "kop", objN: 3, relation: "above",
+    a: "sini ze em kopun",   b: "sini se em kopun",
+    correct: "A", violation: "wrong AGR class (se vs ze)" },
+  { id: "Q16", subj: "kop", subN: 1, obj: "sin", objN: 2, relation: "below",
+    a: "kop za en sini",     b: "kop sa en sini",
+    correct: "B", violation: "wrong AGR class (za vs sa)" },
+  { id: "Q17", subj: "tak", subN: 1, obj: "kop", objN: 2, relation: "above",
+    a: "tak sa em kopi",     b: "tak sa em kop",
+    correct: "A", violation: "wrong noun-number suffix on dual object" },
+  { id: "Q18", subj: "dut", subN: 3, obj: "sin", objN: 1, relation: "above",
+    a: "dutun so em sin",    b: "dutun zo em sin",
+    correct: "B", violation: "wrong AGR class (so vs zo)" },
+  { id: "Q19", subj: "kop", subN: 2, obj: "tak", objN: 1, relation: "below",
+    a: "kopi se en tak",     b: "kop se en tak",
+    correct: "A", violation: "wrong noun-number suffix on dual subject" },
+  { id: "Q20", subj: "sin", subN: 3, obj: "dut", objN: 2, relation: "below",
+    a: "sinun za en duti",   b: "sinun zo en duti",
+    correct: "B", violation: "wrong AGR number (za vs zo)" }
 ];
 
 /* ----------------- i18n ----------------- */
 const I18N = {
   ja: {
-    subtitle: "5分間で未知言語の文と絵のペアを観察し、文法規則を推測します。テストでは絵に合う文を A と B から選びます。",
+    subtitle: "4分間で未知言語の文と絵のペアを観察し、文法規則を推測します。テストでは絵に合う文を A と B から選びます。",
     badge: "文法推測テスト",
     intro_heading: "はじめに",
-    intro_step1: "学習フェーズ（5分間）: 18個の絵と未知言語の文のペアを観察します。",
-    intro_step2: "開始から2分後に「テスト開始」が有効になります。準備ができれば早めに進めます。",
+    intro_step1: "学習フェーズ（4分間）: 20個の絵と未知言語の文のペアを観察します。",
+    intro_step2: "開始から1分後に「テスト開始」が有効になります。準備ができれば早めに進めます。",
     intro_step3: "テスト（全20問）: 絵を見て、AとBの2文のうち絵を正しく説明している方を選びます。",
     id_label: "ID（1〜15文字の英大文字・数字）",
     id_placeholder: "例: SUBJ001",
@@ -170,15 +182,15 @@ const I18N = {
     exit_fullscreen_btn: "全画面を終了",
     timer_format: (m, s) => `${m}分${String(s).padStart(2, "0")}秒`,
     timer_end: "時間終了",
-    timer_initial: "5分00秒",
+    timer_initial: "4分00秒",
     toggle_target_label: "EN"
   },
   en: {
-    subtitle: "For 5 minutes, observe sentence-picture pairs in an unknown language and infer the grammar. In the test, choose A or B to describe each picture.",
+    subtitle: "For 4 minutes, observe sentence-picture pairs in an unknown language and infer the grammar. In the test, choose A or B to describe each picture.",
     badge: "Grammatical Inference",
     intro_heading: "Instructions",
-    intro_step1: "Training phase (5 minutes): observe 18 picture-sentence pairs in an unknown language.",
-    intro_step2: "The \"Start Test\" button becomes active after 2 minutes. You may proceed early once you feel ready.",
+    intro_step1: "Training phase (4 minutes): observe 20 picture-sentence pairs in an unknown language.",
+    intro_step2: "The \"Start Test\" button becomes active after 1 minute. You may proceed early once you feel ready.",
     intro_step3: "Test (20 trials): for each picture, choose whichever of the two sentences (A or B) correctly describes it.",
     id_label: "ID (1–15 alphanumeric)",
     id_placeholder: "e.g. SUBJ001",
@@ -208,7 +220,7 @@ const I18N = {
     exit_fullscreen_btn: "Exit Fullscreen",
     timer_format: (m, s) => `${m}m ${String(s).padStart(2, "0")}s`,
     timer_end: "Time's up",
-    timer_initial: "5m 00s",
+    timer_initial: "4m 00s",
     toggle_target_label: "日本語"
   }
 };
@@ -304,9 +316,10 @@ const state = {
   nVisibilityHidden: 0
 };
 
-/* Total training duration (5 min) and unlock delay (2 min) for "Start Test" */
-const TRAIN_TOTAL_MS = 5 * 60 * 1000;
-const TRAIN_UNLOCK_MS = 2 * 60 * 1000;
+/* Total training duration (4 min) and unlock delay (1 min) for "Start Test"
+ * — matches Meara's LLAMA-F v4.0.6 timing. */
+const TRAIN_TOTAL_MS = 4 * 60 * 1000;
+const TRAIN_UNLOCK_MS = 60 * 1000;
 
 /* ----------------- DOM ----------------- */
 const panels = {
@@ -403,16 +416,52 @@ function setIdentifier(value) {
   resultId.textContent = value;
 }
 
-function repeatGlyph(glyph, count) {
-  return glyph.repeat(Math.max(1, count));
+/* ---------- SVG renderer for abstract geometric pictures ---------- */
+const SVG_STROKE = "#1e1c18";
+const SVG_FILL = "#fff6e7";
+
+function renderShape(shape, x, y) {
+  switch (shape) {
+    case "triangle":
+      return `<polygon points="${x},${y - 14} ${x - 13},${y + 10} ${x + 13},${y + 10}" fill="${SVG_FILL}" stroke="${SVG_STROKE}" stroke-width="2" stroke-linejoin="round"/>`;
+    case "square":
+      return `<rect x="${x - 12}" y="${y - 12}" width="24" height="24" rx="2" fill="${SVG_FILL}" stroke="${SVG_STROKE}" stroke-width="2"/>`;
+    case "circle":
+      return `<circle cx="${x}" cy="${y}" r="13" fill="${SVG_FILL}" stroke="${SVG_STROKE}" stroke-width="2"/>`;
+    case "ellipse":
+      return `<ellipse cx="${x}" cy="${y}" rx="15" ry="9" fill="${SVG_FILL}" stroke="${SVG_STROKE}" stroke-width="2"/>`;
+    default:
+      return "";
+  }
+}
+
+function renderRow(shape, n, centerX, y) {
+  const spacing = 32;
+  const count = Math.max(1, Math.min(n, 4));
+  const totalWidth = (count - 1) * spacing;
+  let svg = "";
+  for (let i = 0; i < count; i += 1) {
+    const x = centerX - totalWidth / 2 + i * spacing;
+    svg += renderShape(shape, x, y);
+  }
+  return svg;
 }
 
 function pictureHtml(item) {
-  return `
-    <span class="subj" aria-hidden="true">${repeatGlyph(item.subj, item.subN)}</span>
-    <span class="action" aria-hidden="true">${item.act}</span>
-    <span class="obj" aria-hidden="true">${repeatGlyph(item.obj, item.objN)}</span>
-  `;
+  const W = 220;
+  const H = 130;
+  const cx = W / 2;
+  const subjOnTop = item.relation === "above";
+  const topStem = subjOnTop ? item.subj : item.obj;
+  const topN = subjOnTop ? item.subN : item.objN;
+  const bottomStem = subjOnTop ? item.obj : item.subj;
+  const bottomN = subjOnTop ? item.objN : item.subN;
+  const topShape = SHAPE_MAP[topStem].shape;
+  const bottomShape = SHAPE_MAP[bottomStem].shape;
+  return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="abstract scene">
+    ${renderRow(topShape, topN, cx, 36)}
+    ${renderRow(bottomShape, bottomN, cx, 94)}
+  </svg>`;
 }
 
 /* ----------------- Training ----------------- */

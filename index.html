@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LLAMA F</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Alegreya+Sans:wght@400;600;700&family=Fraunces:opsz,wght@9..144,600;700&family=Noto+Sans+JP:wght@400;600;700&family=Noto+Serif+JP:wght@600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js" defer></script>
+  <style>
+    :root {
+      --paper: #f4efe4;
+      --panel: #fffdf8;
+      --ink: #1e1c18;
+      --muted: #5c5851;
+      --accent: #d8723b;
+      --accent-strong: #b5542c;
+      --teal: #2a8a7d;
+      --shadow: 0 20px 50px rgba(28, 23, 18, 0.12);
+      --radius: 20px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Alegreya Sans", "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 15% 20%, #fff5dd 0%, #f1e5cf 45%, #e9dcc4 100%),
+        repeating-linear-gradient(125deg, rgba(255, 255, 255, 0.08) 0px, rgba(255, 255, 255, 0.08) 12px, transparent 12px, transparent 22px);
+    }
+
+    body::before,
+    body::after {
+      content: "";
+      position: fixed;
+      border-radius: 999px;
+      z-index: -1;
+      opacity: 0.6;
+      filter: blur(0px);
+    }
+
+    body::before {
+      width: 420px;
+      height: 420px;
+      top: -120px;
+      right: -80px;
+      background: radial-gradient(circle, rgba(216, 114, 59, 0.25), rgba(216, 114, 59, 0));
+    }
+
+    body::after {
+      width: 520px;
+      height: 520px;
+      bottom: -180px;
+      left: -120px;
+      background: radial-gradient(circle, rgba(42, 138, 125, 0.2), rgba(42, 138, 125, 0));
+    }
+
+    h1, h2, h3 {
+      font-family: "Fraunces", "Noto Serif JP", "Hiragino Mincho ProN", "Yu Mincho", serif;
+      margin: 0 0 12px;
+      letter-spacing: 0.02em;
+    }
+
+    p { margin: 0 0 12px; color: var(--muted); }
+
+    .shell {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 48px 24px 80px;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+
+    .hero {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+
+    .hero h1 {
+      font-size: clamp(2rem, 4vw, 3.2rem);
+      color: var(--ink);
+    }
+
+    .hero .subtitle {
+      max-width: 540px;
+      font-size: 1.05rem;
+    }
+
+    .hero-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      background: #ffffffcc;
+      color: var(--accent-strong);
+      padding: 8px 16px;
+      border-radius: 999px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      border: 1px solid rgba(181, 84, 44, 0.2);
+    }
+
+    .lang-toggle {
+      background: #ffffffcc;
+      color: var(--ink);
+      padding: 7px 14px;
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: 0.78rem;
+      letter-spacing: 0.06em;
+      border: 1px solid rgba(30, 28, 24, 0.15);
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.2s ease;
+      font-family: inherit;
+    }
+    .lang-toggle:hover { background: #fff; transform: translateY(-1px); }
+
+    .panel { display: none; }
+    .panel.is-active { display: block; animation: fadeUp 0.6s ease both; }
+
+    .card {
+      background: var(--panel);
+      border-radius: var(--radius);
+      padding: 28px;
+      box-shadow: var(--shadow);
+      border: 1px solid rgba(30, 28, 24, 0.08);
+    }
+    .card.wide { padding: 28px 24px 24px; }
+
+    .notes { margin: 0 0 20px; padding-left: 18px; color: var(--muted); }
+    .notes li { margin-bottom: 8px; }
+
+    .input-row { display: flex; gap: 12px; flex-wrap: wrap; }
+
+    input[type="text"] {
+      flex: 1;
+      min-width: 240px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid rgba(30, 28, 24, 0.2);
+      font-size: 1rem;
+      background: #fffaf1;
+      color: var(--ink);
+    }
+    input[type="text"]:focus {
+      outline: 2px solid rgba(216, 114, 59, 0.4);
+      border-color: rgba(216, 114, 59, 0.6);
+    }
+
+    .btn {
+      border: none;
+      border-radius: 999px;
+      padding: 12px 22px;
+      font-weight: 700;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+      box-shadow: 0 10px 20px rgba(24, 20, 16, 0.12);
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-secondary { background: #f0e3d1; color: var(--ink); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; transform: none; }
+    .btn:not(:disabled):hover { transform: translateY(-1px); }
+
+    .hint { font-size: 0.9rem; color: var(--muted); }
+    .error { color: #a5352a; font-weight: 600; min-height: 1.2em; }
+
+    .learn-header, .test-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+
+    .identifier { font-weight: 600; color: var(--ink); }
+
+    .timer {
+      background: rgba(42, 138, 125, 0.12);
+      color: var(--teal);
+      padding: 8px 16px;
+      border-radius: 999px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .callout {
+      background: rgba(216, 114, 59, 0.12);
+      color: var(--accent-strong);
+      padding: 10px 16px;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+
+    .learn-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+    .learn-card {
+      background: #fff6e7;
+      border: 1px solid rgba(30, 28, 24, 0.08);
+      border-radius: 16px;
+      padding: 16px 14px 14px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .learn-card:hover { transform: translateY(-2px); box-shadow: 0 12px 18px rgba(24, 20, 16, 0.08); }
+
+    .picture {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-size: 1.6rem;
+      min-height: 56px;
+      width: 100%;
+      flex-wrap: nowrap;
+      white-space: nowrap;
+    }
+    .picture .subj, .picture .obj {
+      display: inline-flex;
+      align-items: center;
+      gap: 0;
+      letter-spacing: -0.15em;
+      padding-right: 0.15em;
+    }
+    .picture .action { font-size: 1.3rem; opacity: 0.7; padding: 0 4px; }
+
+    .sentence {
+      font-family: "Fraunces", "Noto Serif JP", serif;
+      font-weight: 600;
+      font-size: 1.05rem;
+      letter-spacing: 0.02em;
+      color: var(--ink);
+      text-align: center;
+      padding: 6px 10px;
+      background: #fff;
+      border-radius: 999px;
+      box-shadow: 0 4px 10px rgba(24, 20, 16, 0.06);
+    }
+
+    .learn-grid.is-locked { opacity: 0.6; pointer-events: none; }
+
+    .learn-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .test-pic-wrapper { display: flex; justify-content: center; margin: 20px 0 8px; }
+    .test-pic {
+      background: #fff6e7;
+      border: 1px solid rgba(30, 28, 24, 0.08);
+      border-radius: 18px;
+      padding: 18px 30px;
+      font-size: 2.6rem;
+      min-width: 280px;
+      box-shadow: 0 10px 24px rgba(24, 20, 16, 0.08);
+    }
+
+    .test-prompt {
+      text-align: center;
+      font-size: 1rem;
+      color: var(--muted);
+      margin: 8px 0 14px;
+    }
+
+    .choices {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 8px 0 16px;
+    }
+    @media (max-width: 640px) {
+      .choices { grid-template-columns: 1fr; }
+    }
+
+    .choice {
+      background: #fff;
+      border: 2px solid rgba(30, 28, 24, 0.12);
+      border-radius: 16px;
+      padding: 18px 20px;
+      font-family: "Fraunces", "Noto Serif JP", serif;
+      font-weight: 600;
+      font-size: 1.15rem;
+      color: var(--ink);
+      cursor: pointer;
+      text-align: center;
+      transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+      box-shadow: 0 6px 14px rgba(24, 20, 16, 0.06);
+    }
+    .choice:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(24, 20, 16, 0.1); }
+    .choice.is-selected {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(216, 114, 59, 0.2), 0 8px 18px rgba(24, 20, 16, 0.08);
+    }
+    .choices.is-locked { opacity: 0.7; pointer-events: none; }
+
+    .choice-label {
+      display: block;
+      font-size: 0.75rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-family: "Alegreya Sans", sans-serif;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .score-line { font-size: 1.2rem; color: var(--ink); }
+    .score-bar {
+      width: 100%;
+      height: 16px;
+      border-radius: 999px;
+      background: rgba(30, 28, 24, 0.08);
+      overflow: hidden;
+      margin: 16px 0;
+    }
+    .score-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--teal), var(--accent));
+      transition: width 0.8s ease;
+    }
+
+    .rotate-alert {
+      display: none;
+      margin-bottom: 16px;
+      padding: 12px 16px;
+      border-radius: 12px;
+      background: rgba(165, 53, 42, 0.12);
+      color: #7d1f18;
+      font-weight: 600;
+    }
+    @media (max-width: 720px) and (orientation: portrait) {
+      .rotate-alert { display: block; }
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <div>
+        <h1>LLAMA F</h1>
+        <p class="subtitle" data-i18n="subtitle"></p>
+      </div>
+      <div class="hero-right">
+        <div class="badge" data-i18n="badge"></div>
+        <button id="lang-toggle" class="lang-toggle" type="button" aria-label="Toggle language">EN</button>
+      </div>
+    </header>
+
+    <section class="panel is-active" data-panel="intro">
+      <div class="card">
+        <h2 data-i18n="intro_heading"></h2>
+        <ul class="notes">
+          <li data-i18n="intro_step1"></li>
+          <li data-i18n="intro_step2"></li>
+          <li data-i18n="intro_step3"></li>
+        </ul>
+        <form id="identifier-form" novalidate>
+          <label for="identifier-input" class="identifier" data-i18n="id_label"></label>
+          <div class="input-row">
+            <input id="identifier-input" name="identifier" type="text" autocomplete="off" maxlength="15" required>
+            <button class="btn btn-primary" type="submit" data-i18n="start_btn"></button>
+          </div>
+          <p class="hint" data-i18n="id_hint"></p>
+          <div id="identifier-error" class="error" role="alert" aria-live="polite"></div>
+        </form>
+      </div>
+    </section>
+
+    <section class="panel" data-panel="learn">
+      <div class="card wide">
+        <div class="rotate-alert" data-i18n="rotate_alert"></div>
+        <div class="learn-header">
+          <div>
+            <h2 data-i18n="learn_heading"></h2>
+            <div class="identifier"><span data-i18n="id_display"></span> <span id="identifier-display">-</span></div>
+          </div>
+          <div class="timer" id="learn-timer" aria-live="polite">5:00</div>
+        </div>
+        <p class="hint" data-i18n="learn_hint"></p>
+        <div id="learn-grid" class="learn-grid"></div>
+        <div class="learn-footer">
+          <div class="callout" data-i18n="learn_callout"></div>
+          <button id="start-test" class="btn btn-primary" type="button" disabled data-i18n="start_test_btn"></button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" data-panel="test">
+      <div class="card wide">
+        <div class="rotate-alert" data-i18n="rotate_alert"></div>
+        <div class="test-header">
+          <div>
+            <h2 data-i18n="test_heading"></h2>
+            <div class="identifier"><span data-i18n="id_display"></span> <span id="identifier-display-2">-</span></div>
+          </div>
+          <div class="timer" id="progress-display">0 / 20</div>
+        </div>
+
+        <div class="test-prompt" id="test-prompt"></div>
+        <div class="test-pic-wrapper">
+          <div id="test-pic" class="test-pic picture"></div>
+        </div>
+
+        <div id="choices" class="choices">
+          <button id="choice-a" class="choice" type="button">
+            <span class="choice-label">A</span>
+            <span id="choice-a-text">—</span>
+          </button>
+          <button id="choice-b" class="choice" type="button">
+            <span class="choice-label">B</span>
+            <span id="choice-b-text">—</span>
+          </button>
+        </div>
+
+        <div class="actions">
+          <button id="next-btn" class="btn btn-primary" type="button" disabled data-i18n="next_btn"></button>
+          <button id="end-btn" class="btn btn-primary" type="button" disabled data-i18n="end_btn"></button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" data-panel="result">
+      <div class="card">
+        <h2 data-i18n="result_heading"></h2>
+        <p class="score-line"><span id="result-id"></span> <span data-i18n="score_label"></span> <strong id="score-total">0</strong> / <span id="score-max">20</span></p>
+        <div class="score-bar"><div id="score-fill" class="score-fill"></div></div>
+        <p id="score-summary" class="hint"></p>
+        <p id="download-note" class="hint" aria-live="polite"></p>
+        <div class="actions">
+          <button id="restart-btn" class="btn btn-secondary" type="button" data-i18n="restart_btn"></button>
+          <button id="exit-fullscreen" class="btn btn-primary" type="button" data-i18n="exit_fullscreen_btn"></button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="script.js" defer></script>
+</body>
+</html>
